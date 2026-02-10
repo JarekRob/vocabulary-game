@@ -100,6 +100,10 @@
             color: white;
         }
 
+        .mode-btn.stickers {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+        }
+
         .game-container {
             background: white;
             padding: 30px;
@@ -354,6 +358,147 @@
 
         .import-export button {
             margin: 5px;
+        }
+
+        /* Stickers Mode Styles */
+        .stickers-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .stickers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+        }
+
+        .sticker-item {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .sticker-item:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .sticker-item.locked {
+            opacity: 0.3;
+            cursor: default;
+            filter: grayscale(100%);
+        }
+
+        .sticker-item.locked:hover {
+            transform: none;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .sticker-item.new {
+            animation: stickerAppear 0.5s;
+        }
+
+        @keyframes stickerAppear {
+            0% {
+                transform: scale(0) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2) rotate(180deg);
+            }
+            100% {
+                transform: scale(1) rotate(360deg);
+                opacity: 1;
+            }
+        }
+
+        .sticker-category {
+            margin-bottom: 30px;
+        }
+
+        .sticker-category h3 {
+            color: #667eea;
+            font-size: 1.6em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sticker-progress {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .sticker-progress-bar {
+            background: #e0e0e0;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .sticker-progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .sticker-reward-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            text-align: center;
+            z-index: 10000;
+            animation: stickerRewardAppear 0.5s;
+        }
+
+        .sticker-reward-popup .sticker-display {
+            font-size: 6em;
+            margin: 20px 0;
+            animation: rotate 2s infinite;
+        }
+
+        @keyframes stickerRewardAppear {
+            from {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes rotate {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-10deg); }
+            75% { transform: rotate(10deg); }
         }
 
         /* Settings Mode Styles */
@@ -699,6 +844,7 @@
         <div class="mode-selector">
             <button class="mode-btn quiz active" onclick="setMode('quiz')">❓ Quiz - Wybierz odpowiedź</button>
             <button class="mode-btn spelling" onclick="setMode('spelling')">✍️ Sprawdź pisownię</button>
+            <button class="mode-btn stickers" onclick="setMode('stickers')">🎁 Moje naklejki (<span id="stickerCount">0</span>)</button>
             <button class="mode-btn edit" onclick="setMode('edit')">📝 Edytuj słówka</button>
             <button class="mode-btn settings" onclick="setMode('settings')">⚙️ Opcje</button>
         </div>
@@ -755,7 +901,8 @@
             voiceName: '', // Empty means default voice
             voiceRate: 0.8,
             voicePitch: 1.0,
-            feedbackDisplayTime: 2500 // Time in ms to show correct answer after mistake
+            feedbackDisplayTime: 2500, // Time in ms to show correct answer after mistake
+            stickerRewardInterval: 10 // Every X correct answers = 1 sticker
         };
 
         function loadSettings() {
@@ -785,6 +932,95 @@
         let currentQuestion = 0;
         let lastMilestone = 0; // Track last milestone for confetti
         let lastScoreMilestone = 0; // Track last score milestone
+        let lastStickerReward = 0; // Track last sticker reward
+
+        // Sticker collection system
+        const availableStickers = {
+            animals: [
+                '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯',
+                '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆',
+                '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋',
+                '🐌', '🐞', '🐜', '🦟', '🦗', '🕷️', '🦂', '🐢', '🐍', '🦎',
+                '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟',
+                '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧',
+                '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃', '🐂'
+            ],
+            food: [
+                '🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒',
+                '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬',
+                '🥒', '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠',
+                '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞',
+                '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕',
+                '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕',
+                '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙'
+            ],
+            nature: [
+                '🌸', '🌺', '🌻', '🌼', '🌷', '🥀', '🌹', '🏵️', '💐', '🌾',
+                '🌱', '🌿', '☘️', '🍀', '🍃', '🍂', '🍁', '🌵', '🌴', '🌳',
+                '🌲', '🎋', '🎍', '🌾', '💮', '🏞️', '⛰️', '🌋', '🗻', '🏔️',
+                '⛺', '🏕️', '🏖️', '🏜️', '🏝️', '🌅', '🌄', '🌠', '🎆', '🎇',
+                '🌌', '🌃', '🌆', '🌁', '🌉', '🌊', '🌈', '⭐', '🌟', '✨',
+                '💫', '☄️', '🌙', '🌎', '🌍', '🌏', '🪐', '💧', '💦', '☔'
+            ],
+            hearts: [
+                '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
+                '❤️‍🔥', '❤️‍🩹', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟',
+                '♥️', '💌', '💋', '💏', '💑', '👨‍❤️‍👨', '👩‍❤️‍👩', '🫶', '🤲', '👐'
+            ],
+            stars: [
+                '⭐', '🌟', '✨', '💫', '🌠', '🎆', '🎇', '🎉', '🎊', '🎈',
+                '🎀', '🎁', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '👑', '💎',
+                '💍', '🔮', '🪄', '🎭', '🎪', '🎨', '🎬', '🎤', '🎧', '🎼'
+            ],
+            space: [
+                '🌌', '🌃', '🌠', '🌟', '⭐', '✨', '💫', '☄️', '🪐', '🌙',
+                '🌎', '🌍', '🌏', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓',
+                '🌔', '🌚', '🌝', '🌛', '🌜', '🌞', '⛅', '🌤️', '🌥️', '☁️',
+                '🌦️', '🌧️', '⛈️', '🌩️', '🌨️', '❄️', '☃️', '⛄', '🚀', '🛸'
+            ],
+            sports: [
+                '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱',
+                '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳',
+                '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸️',
+                '🥌', '🎿', '⛷️', '🏂', '🪂', '🏋️', '🤸', '🤼', '🤾', '🏌️'
+            ],
+            school: [
+                '📚', '📖', '📕', '📗', '📘', '📙', '📓', '📔', '📒', '📃',
+                '📜', '📄', '📰', '🗞️', '📑', '🔖', '🏷️', '💼', '📁', '📂',
+                '🗂️', '📅', '📆', '🗓️', '📇', '📈', '📉', '📊', '📋', '📌',
+                '📍', '📎', '🖇️', '📏', '📐', '✂️', '🗃️', '🗄️', '🗑️', '✏️',
+                '✒️', '🖋️', '🖊️', '🖍️', '📝', '💼', '🎓', '🎒', '🏫', '🖨️'
+            ],
+            music: [
+                '🎵', '🎶', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸', '🪕', '🎻',
+                '🪘', '🎧', '🎙️', '🎚️', '🎛️', '🎤', '📻', '📯', '🔔', '🔕',
+                '🎺', '🎸', '🪕', '🎻', '🪘', '📢', '📣', '🔊', '🔉', '🔈'
+            ],
+            celebration: [
+                '🎉', '🎊', '🎈', '🎀', '🎁', '🎂', '🍰', '🧁', '🥳', '🤩',
+                '😍', '🥰', '😘', '💝', '🎆', '🎇', '✨', '🌟', '⭐', '🏆',
+                '🥇', '🥈', '🥉', '🏅', '🎖️', '👑', '💎', '🎊', '🎉', '🥳'
+            ]
+        };
+
+        // Load earned stickers
+        function loadStickers() {
+            const saved = localStorage.getItem('earnedStickers');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    return [];
+                }
+            }
+            return [];
+        }
+
+        function saveStickers(stickers) {
+            localStorage.setItem('earnedStickers', JSON.stringify(stickers));
+        }
+
+        let earnedStickers = loadStickers();
 
         function setMode(mode) {
             currentMode = mode;
@@ -815,9 +1051,13 @@
             document.getElementById('score').textContent = score;
             document.getElementById('correct').textContent = correct;
             document.getElementById('incorrect').textContent = incorrect;
+            document.getElementById('stickerCount').textContent = earnedStickers.length;
             
             // Check for milestones
             checkMilestones();
+            
+            // Check for sticker rewards
+            checkStickerReward();
         }
 
         function checkMilestones() {
@@ -838,6 +1078,64 @@
                 showMilestone(`💯 ${score} punktów!`, '🎉🎊🎈');
                 if (settings.enableConfetti) createConfetti();
             }
+        }
+
+        function checkStickerReward() {
+            // Check if user earned a new sticker
+            if (correct > 0 && settings.stickerRewardInterval > 0 &&
+                correct % settings.stickerRewardInterval === 0 && correct !== lastStickerReward) {
+                lastStickerReward = correct;
+                rewardSticker();
+            }
+        }
+
+        function rewardSticker() {
+            // Get all available stickers
+            const allStickers = Object.values(availableStickers).flat();
+            
+            // Get unearned stickers
+            const unearnedStickers = allStickers.filter(s => !earnedStickers.includes(s));
+            
+            if (unearnedStickers.length === 0) {
+                // All stickers collected!
+                showStickerReward('🏆', 'Brawo! Masz wszystkie naklejki!');
+                return;
+            }
+            
+            // Select random sticker
+            const newSticker = unearnedStickers[Math.floor(Math.random() * unearnedStickers.length)];
+            
+            // Add to earned stickers
+            earnedStickers.push(newSticker);
+            saveStickers(earnedStickers);
+            
+            // Show reward popup
+            showStickerReward(newSticker, 'Nowa naklejka!');
+            
+            // Create confetti
+            if (settings.enableConfetti) createConfetti();
+            if (settings.enableSound) playSound('celebration');
+            
+            // Update counter
+            document.getElementById('stickerCount').textContent = earnedStickers.length;
+        }
+
+        function showStickerReward(sticker, message) {
+            const popup = document.createElement('div');
+            popup.className = 'sticker-reward-popup';
+            popup.innerHTML = `
+                <h2 style="color: #667eea; font-size: 2em;">🎁 ${message}</h2>
+                <div class="sticker-display">${sticker}</div>
+                <p style="font-size: 1.3em; color: #666;">Sprawdź zakładkę "Moje naklejki"!</p>
+                <button class="submit-btn" onclick="this.parentElement.remove()" style="margin-top: 20px;">Dziękuję! ✨</button>
+            `;
+            document.body.appendChild(popup);
+            
+            setTimeout(() => {
+                if (popup.parentElement) {
+                    popup.remove();
+                }
+            }, 5000);
         }
 
         function showMilestone(text, emoji) {
@@ -956,10 +1254,106 @@
                 initQuizGame(container);
             } else if (currentMode === 'spelling') {
                 initSpellingGame(container);
+            } else if (currentMode === 'stickers') {
+                initStickersMode(container);
             } else if (currentMode === 'edit') {
                 initEditMode(container);
             } else if (currentMode === 'settings') {
                 initSettingsMode(container);
+            }
+        }
+
+        function initStickersMode(container) {
+            container.className = 'game-container stickers-container';
+            
+            const allStickers = Object.values(availableStickers).flat();
+            const totalStickers = allStickers.length;
+            const earnedCount = earnedStickers.length;
+            const percentage = Math.round((earnedCount / totalStickers) * 100);
+            
+            let html = `
+                <h2 style="text-align: center; color: #667eea; margin-bottom: 20px; font-size: 2.5em;">
+                    🎁 Moja Kolekcja Naklejek
+                </h2>
+                
+                <div class="sticker-progress">
+                    <h3 style="color: #667eea; margin-bottom: 10px;">
+                        Zebrano ${earnedCount} z ${totalStickers} naklejek (${percentage}%)
+                    </h3>
+                    <div class="sticker-progress-bar">
+                        <div class="sticker-progress-fill" style="width: ${percentage}%">
+                            ${percentage > 10 ? percentage + '%' : ''}
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-top: 10px;">
+                        💡 Zdobywasz naklejkę co ${settings.stickerRewardInterval} poprawnych odpowiedzi!
+                    </p>
+                </div>
+            `;
+            
+            // Display stickers by category
+            for (const [category, stickers] of Object.entries(availableStickers)) {
+                const categoryEarned = stickers.filter(s => earnedStickers.includes(s)).length;
+                const categoryNames = {
+                    animals: '🐾 Zwierzęta',
+                    food: '🍕 Jedzenie',
+                    nature: '🌿 Natura',
+                    hearts: '💕 Serduszka',
+                    stars: '⭐ Gwiazdy',
+                    space: '🚀 Kosmos',
+                    sports: '⚽ Sport',
+                    school: '📚 Szkoła',
+                    music: '🎵 Muzyka',
+                    celebration: '🎉 Świętowanie'
+                };
+                
+                html += `
+                    <div class="sticker-category">
+                        <h3>${categoryNames[category]} - ${categoryEarned}/${stickers.length}</h3>
+                        <div class="stickers-grid">
+                `;
+                
+                stickers.forEach(sticker => {
+                    const earned = earnedStickers.includes(sticker);
+                    const classes = earned ? 'sticker-item' : 'sticker-item locked';
+                    const display = earned ? sticker : '🔒';
+                    
+                    html += `
+                        <div class="${classes}" title="${earned ? 'Zdobyto!' : 'Zablokowane'}">
+                            ${display}
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="submit-btn" onclick="setMode('quiz')">
+                        🎮 Wróć do gry i zdobądź więcej!
+                    </button>
+                    <button class="submit-btn" onclick="resetStickers()" 
+                            style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); margin-left: 10px;">
+                        🔄 Resetuj kolekcję
+                    </button>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        function resetStickers() {
+            if (confirm('Czy na pewno chcesz zresetować całą kolekcję naklejek? Wszystkie zdobyte naklejki zostaną utracone!')) {
+                earnedStickers = [];
+                saveStickers(earnedStickers);
+                lastStickerReward = 0;
+                document.getElementById('stickerCount').textContent = '0';
+                initStickersMode(document.getElementById('gameContainer'));
+                alert('✅ Kolekcja naklejek została zresetowana!');
             }
         }
 
@@ -1173,6 +1567,15 @@
                             <span style="color: #666;">sekund</span>
                         </div>
                     </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-label">Nagroda naklejką</div>
+                        <div class="setting-description">Co ile poprawnych odpowiedzi zdobywasz naklejkę?</div>
+                        <div class="setting-input">
+                            <input type="number" id="stickerInterval" value="${settings.stickerRewardInterval}" min="5" max="50" step="5">
+                            <span style="color: #666;">poprawnych odpowiedzi</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="settings-section">
@@ -1293,6 +1696,7 @@
             settings.voiceRate = parseFloat(document.getElementById('voiceRate').value);
             settings.voicePitch = parseFloat(document.getElementById('voicePitch').value);
             settings.feedbackDisplayTime = parseFloat(document.getElementById('feedbackTime').value) * 1000;
+            settings.stickerRewardInterval = parseInt(document.getElementById('stickerInterval').value);
             
             saveSettings(settings);
             
