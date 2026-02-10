@@ -40,6 +40,25 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
         }
 
+        .active-categories {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            padding: 10px;
+        }
+
+        .category-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
         .stats {
             display: flex;
             justify-content: center;
@@ -358,6 +377,76 @@
 
         .import-export button {
             margin: 5px;
+        }
+
+        /* Category Management Styles */
+        .category-management {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #667eea;
+        }
+
+        .category-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 10px;
+        }
+
+        .category-item-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .category-item input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 1.1em;
+        }
+
+        .category-item .category-checkbox {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        .category-item .word-count {
+            color: #666;
+            font-size: 0.9em;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .add-category-btn {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .add-category-btn:hover {
+            transform: scale(1.05);
         }
 
         /* Stickers Mode Styles */
@@ -833,7 +922,7 @@
     <div class="container">
         <header>
             <h1>🌈 Nauka Angielskiego</h1>
-            <p style="font-size: 1.2em; color: #666; margin-top: 10px;">Pory Roku i Ubrania</p>
+            <div class="active-categories" id="activeCategoriesDisplay"></div>
             <div class="stats">
                 <div class="stat-item">⭐ Punkty: <span id="score">0</span></div>
                 <div class="stat-item">🎯 Poprawne: <span id="correct">0</span></div>
@@ -902,7 +991,9 @@
             voiceRate: 0.8,
             voicePitch: 1.0,
             feedbackDisplayTime: 2500, // Time in ms to show correct answer after mistake
-            stickerRewardInterval: 10 // Every X correct answers = 1 sticker
+            stickerRewardInterval: 10, // Every X correct answers = 1 sticker
+            shuffleQuestions: true, // Randomize question order
+            activeCategories: ['seasons', 'clothes'] // Which categories are active
         };
 
         function loadSettings() {
@@ -1022,6 +1113,55 @@
 
         let earnedStickers = loadStickers();
 
+        // Ensure voices are loaded (fix for first speech synthesis)
+        if ('speechSynthesis' in window) {
+            // Trigger voice loading
+            window.speechSynthesis.getVoices();
+            
+            // Some browsers need this event
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = () => {
+                    // Voices are now loaded
+                };
+            }
+        }
+
+        // Get category display names
+        const categoryDisplayNames = {
+            seasons: '🌦️ Pory roku',
+            clothes: '👔 Ubrania'
+        };
+
+        // Get words from active categories only
+        function getActiveWords() {
+            let words = [];
+            settings.activeCategories.forEach(category => {
+                if (vocabulary[category]) {
+                    words = words.concat(vocabulary[category]);
+                }
+            });
+            return words;
+        }
+
+        // Update active categories display
+        function updateActiveCategoriesDisplay() {
+            const display = document.getElementById('activeCategoriesDisplay');
+            if (!display) return;
+            
+            if (settings.activeCategories.length === 0) {
+                display.innerHTML = '<div class="category-badge" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">⚠️ Brak aktywnych kategorii!</div>';
+                return;
+            }
+            
+            const badges = settings.activeCategories.map(cat => {
+                const name = categoryDisplayNames[cat] || cat;
+                const count = vocabulary[cat] ? vocabulary[cat].length : 0;
+                return `<div class="category-badge">${name} (${count})</div>`;
+            }).join('');
+            
+            display.innerHTML = badges;
+        }
+
         function setMode(mode) {
             currentMode = mode;
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
@@ -1030,7 +1170,8 @@
             // Reload vocabulary when switching from edit mode
             if (mode !== 'edit') {
                 vocabulary = loadVocabulary();
-                allWords = [...vocabulary.seasons, ...vocabulary.clothes];
+                allWords = getActiveWords();
+                updateActiveCategoriesDisplay();
             }
             
             resetGame();
@@ -1044,6 +1185,17 @@
             currentQuestion = 0;
             lastMilestone = 0;
             lastScoreMilestone = 0;
+            
+            // Get words from active categories only
+            const activeWords = getActiveWords();
+            
+            // Shuffle questions if enabled
+            if (settings.shuffleQuestions) {
+                allWords = shuffle(activeWords);
+            } else {
+                allWords = activeWords;
+            }
+            
             updateStats();
         }
 
@@ -1186,22 +1338,25 @@
                 // Cancel any ongoing speech
                 window.speechSynthesis.cancel();
                 
-                const utterance = new SpeechSynthesisUtterance(word);
-                utterance.lang = lang;
-                utterance.rate = settings.voiceRate;
-                utterance.pitch = settings.voicePitch;
-                utterance.volume = 1;
-                
-                // Set voice if specified
-                if (settings.voiceName) {
-                    const voices = window.speechSynthesis.getVoices();
-                    const selectedVoice = voices.find(v => v.name === settings.voiceName);
-                    if (selectedVoice) {
-                        utterance.voice = selectedVoice;
+                // Wait a bit for cancel to complete
+                setTimeout(() => {
+                    const utterance = new SpeechSynthesisUtterance(word);
+                    utterance.lang = lang;
+                    utterance.rate = settings.voiceRate;
+                    utterance.pitch = settings.voicePitch;
+                    utterance.volume = 1;
+                    
+                    // Set voice if specified - IMPORTANT: Get fresh voice list each time
+                    if (settings.voiceName) {
+                        const voices = window.speechSynthesis.getVoices();
+                        const selectedVoice = voices.find(v => v.name === settings.voiceName);
+                        if (selectedVoice) {
+                            utterance.voice = selectedVoice;
+                        }
                     }
-                }
-                
-                window.speechSynthesis.speak(utterance);
+                    
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
             } else {
                 alert('Twoja przeglądarka nie obsługuje syntezy mowy. Spróbuj Chrome, Edge lub Safari.');
             }
@@ -1576,6 +1731,17 @@
                             <span style="color: #666;">poprawnych odpowiedzi</span>
                         </div>
                     </div>
+                    
+                    <div class="setting-item">
+                        <div class="setting-label">Losowa kolejność pytań</div>
+                        <div class="setting-description">Mieszaj kolejność słówek przy każdym uruchomieniu gry</div>
+                        <div class="setting-input">
+                            <label class="switch">
+                                <input type="checkbox" id="shuffleQuestions" ${settings.shuffleQuestions ? 'checked' : ''}>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="settings-section">
@@ -1697,6 +1863,7 @@
             settings.voicePitch = parseFloat(document.getElementById('voicePitch').value);
             settings.feedbackDisplayTime = parseFloat(document.getElementById('feedbackTime').value) * 1000;
             settings.stickerRewardInterval = parseInt(document.getElementById('stickerInterval').value);
+            settings.shuffleQuestions = document.getElementById('shuffleQuestions').checked;
             
             saveSettings(settings);
             
@@ -1724,6 +1891,16 @@
             container.className = 'game-container edit-container';
             
             container.innerHTML = `
+                <div class="category-management">
+                    <h3 style="color: #667eea; font-size: 1.8em; margin-bottom: 15px;">📂 Zarządzanie Kategoriami</h3>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        ✅ Zaznacz kategorie, które chcesz aktywować w grze. 
+                        Możesz też dodawać nowe kategorie i zmieniać ich nazwy.
+                    </p>
+                    <div class="category-list" id="categoryList"></div>
+                    <button class="add-category-btn" onclick="addNewCategory()">➕ Dodaj nową kategorię</button>
+                </div>
+                
                 <div class="edit-section">
                     <h3>🌦️ Pory roku i natura</h3>
                     <div class="word-list" id="seasonsList"></div>
@@ -1740,16 +1917,184 @@
 
                 <div class="import-export">
                     <h4>📥 Import/Export</h4>
-                    <p style="margin-bottom: 10px; color: #666;">Skopiuj dane poniżej, aby zrobić backup lub przywrócić słówka:</p>
-                    <textarea id="importExport" readonly></textarea>
-                    <button class="submit-btn" onclick="copyToClipboard()">📋 Kopiuj</button>
-                    <button class="submit-btn" onclick="resetToDefault()" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);">🔄 Przywróć domyślne</button>
+                    <p style="margin-bottom: 10px; color: #666;">Eksportuj słówka do pliku JSON lub importuj z pliku:</p>
+                    
+                    <div style="margin: 15px 0;">
+                        <button class="submit-btn" onclick="exportToJSON()">💾 Pobierz plik JSON</button>
+                        <button class="submit-btn" onclick="document.getElementById('importJSON').click()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📁 Wczytaj plik JSON</button>
+                        <input type="file" id="importJSON" accept=".json" style="display: none;" onchange="importFromJSON(event)">
+                    </div>
+                    
+                    <p style="margin-top: 15px; color: #666; font-size: 0.9em;">
+                        ℹ️ Możesz zapisać słówka jako plik JSON, udostępnić go innym lub wczytać później.
+                    </p>
+                    
+                    <details style="margin-top: 15px;">
+                        <summary style="cursor: pointer; color: #667eea; font-weight: bold;">📋 Kopiuj/Wklej JSON (zaawansowane)</summary>
+                        <textarea id="importExport" readonly style="margin-top: 10px;"></textarea>
+                        <button class="submit-btn" onclick="copyToClipboard()">📋 Kopiuj</button>
+                        <button class="submit-btn" onclick="pasteFromClipboard()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📋 Wklej</button>
+                    </details>
+                    
+                    <button class="submit-btn" onclick="resetToDefault()" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); margin-top: 15px;">🔄 Przywróć domyślne</button>
                 </div>
             `;
 
-            renderWordList('seasons');
-            renderWordList('clothes');
+            renderCategoryList();
+            renderAllWordLists();
             updateImportExport();
+        }
+
+        function renderCategoryList() {
+            const list = document.getElementById('categoryList');
+            if (!list) return;
+            
+            list.innerHTML = '';
+            
+            for (const category in vocabulary) {
+                const isActive = settings.activeCategories.includes(category);
+                const wordCount = vocabulary[category].length;
+                const displayName = categoryDisplayNames[category] || category;
+                
+                const item = document.createElement('div');
+                item.className = 'category-item';
+                item.innerHTML = `
+                    <div class="category-item-left">
+                        <input type="checkbox" 
+                               class="category-checkbox" 
+                               ${isActive ? 'checked' : ''} 
+                               onchange="toggleCategory('${category}', this.checked)">
+                        <input type="text" 
+                               value="${displayName}" 
+                               onchange="renameCategoryDisplay('${category}', this.value)"
+                               placeholder="Nazwa kategorii">
+                        <span class="word-count">${wordCount} słówek</span>
+                    </div>
+                    <button class="delete-btn" onclick="deleteCategory('${category}')">🗑️</button>
+                `;
+                list.appendChild(item);
+            }
+        }
+
+        function renderAllWordLists() {
+            for (const category in vocabulary) {
+                const listId = category + 'List';
+                if (document.getElementById(listId)) {
+                    renderWordList(category);
+                } else {
+                    // Create section for new category
+                    createCategorySection(category);
+                }
+            }
+        }
+
+        function createCategorySection(category) {
+            const displayName = categoryDisplayNames[category] || category;
+            const container = document.querySelector('.edit-container');
+            
+            // Find the save button
+            const saveBtn = container.querySelector('.save-btn');
+            
+            // Create new section before save button
+            const section = document.createElement('div');
+            section.className = 'edit-section';
+            section.innerHTML = `
+                <h3>${displayName}</h3>
+                <div class="word-list" id="${category}List"></div>
+                <button class="add-btn" onclick="addWord('${category}')">➕ Dodaj słówko</button>
+            `;
+            
+            container.insertBefore(section, saveBtn);
+            renderWordList(category);
+        }
+
+        function toggleCategory(category, isActive) {
+            if (isActive) {
+                if (!settings.activeCategories.includes(category)) {
+                    settings.activeCategories.push(category);
+                }
+            } else {
+                settings.activeCategories = settings.activeCategories.filter(c => c !== category);
+            }
+            
+            saveSettings(settings);
+            updateActiveCategoriesDisplay();
+            
+            // Show warning if no categories active
+            if (settings.activeCategories.length === 0) {
+                alert('⚠️ Uwaga! Nie masz żadnej aktywnej kategorii. Gra nie będzie działać!');
+            }
+        }
+
+        function renameCategoryDisplay(category, newName) {
+            if (!newName.trim()) return;
+            categoryDisplayNames[category] = newName;
+            updateActiveCategoriesDisplay();
+        }
+
+        function addNewCategory() {
+            const categoryName = prompt('Podaj nazwę nowej kategorii (po angielsku, bez spacji):\nNp: animals, colors, numbers');
+            if (!categoryName) return;
+            
+            // Validate category name
+            const cleanName = categoryName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!cleanName) {
+                alert('❌ Nieprawidłowa nazwa! Użyj tylko liter i cyfr.');
+                return;
+            }
+            
+            if (vocabulary[cleanName]) {
+                alert('❌ Ta kategoria już istnieje!');
+                return;
+            }
+            
+            // Ask for display name
+            const displayName = prompt('Podaj nazwę wyświetlaną (po polsku, z emoji):\nNp: 🐾 Zwierzęta, 🎨 Kolory');
+            
+            // Create new category
+            vocabulary[cleanName] = [];
+            if (displayName) {
+                categoryDisplayNames[cleanName] = displayName;
+            }
+            
+            // Add to active categories
+            settings.activeCategories.push(cleanName);
+            saveSettings(settings);
+            saveVocabulary(vocabulary);
+            
+            // Refresh display
+            renderCategoryList();
+            createCategorySection(cleanName);
+            updateActiveCategoriesDisplay();
+            
+            alert(`✅ Utworzono nową kategorię: ${displayName || cleanName}`);
+        }
+
+        function deleteCategory(category) {
+            if (category === 'seasons' || category === 'clothes') {
+                if (!confirm('⚠️ To jest domyślna kategoria! Czy na pewno chcesz ją usunąć?')) {
+                    return;
+                }
+            } else {
+                if (!confirm(`Czy na pewno chcesz usunąć kategorię "${categoryDisplayNames[category] || category}"?`)) {
+                    return;
+                }
+            }
+            
+            // Remove from vocabulary
+            delete vocabulary[category];
+            
+            // Remove from active categories
+            settings.activeCategories = settings.activeCategories.filter(c => c !== category);
+            
+            // Remove from display names
+            delete categoryDisplayNames[category];
+            
+            saveVocabulary(vocabulary);
+            saveSettings(settings);
+            
+            // Refresh display
+            initEditMode(document.getElementById('gameContainer'));
         }
 
         function renderWordList(category) {
@@ -1813,7 +2158,8 @@
             }
 
             saveVocabulary(vocabulary);
-            allWords = [...vocabulary.seasons, ...vocabulary.clothes];
+            allWords = getActiveWords();
+            updateActiveCategoriesDisplay();
             
             // Show success message
             const container = document.getElementById('gameContainer');
@@ -1826,8 +2172,7 @@
                 message.remove();
             }, 3000);
 
-            renderWordList('seasons');
-            renderWordList('clothes');
+            renderAllWordLists();
         }
 
         function updateImportExport() {
@@ -1842,6 +2187,91 @@
             textarea.select();
             document.execCommand('copy');
             alert('📋 Skopiowano do schowka!');
+        }
+
+        function pasteFromClipboard() {
+            navigator.clipboard.readText().then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data.seasons && data.clothes) {
+                        vocabulary = data;
+                        saveVocabulary(vocabulary);
+                        allWords = [...vocabulary.seasons, ...vocabulary.clothes];
+                        renderWordList('seasons');
+                        renderWordList('clothes');
+                        updateImportExport();
+                        alert('✅ Wklejono i zapisano słówka z schowka!');
+                    } else {
+                        alert('❌ Nieprawidłowy format JSON! Brak pól "seasons" lub "clothes".');
+                    }
+                } catch (e) {
+                    alert('❌ Błąd: To nie jest prawidłowy JSON!\n\n' + e.message);
+                }
+            }).catch(err => {
+                alert('❌ Nie można odczytać schowka. Sprawdź uprawnienia przeglądarki.');
+            });
+        }
+
+        function exportToJSON() {
+            const dataStr = JSON.stringify(vocabulary, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'slowka_' + new Date().toISOString().split('T')[0] + '.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            alert('✅ Plik JSON został pobrany!');
+        }
+
+        function importFromJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    // Validate structure
+                    if (!data.seasons || !data.clothes) {
+                        alert('❌ Nieprawidłowy format pliku JSON!\n\nPlik musi zawierać pola "seasons" i "clothes".');
+                        return;
+                    }
+                    
+                    // Validate data
+                    const isValid = data.seasons.every(w => w.polish && w.english && w.emoji) &&
+                                   data.clothes.every(w => w.polish && w.english && w.emoji);
+                    
+                    if (!isValid) {
+                        alert('❌ Niektóre słówka są niepełne!\n\nKażde słówko musi mieć: polish, english, emoji.');
+                        return;
+                    }
+                    
+                    // Import successful
+                    vocabulary = data;
+                    saveVocabulary(vocabulary);
+                    allWords = [...vocabulary.seasons, ...vocabulary.clothes];
+                    renderWordList('seasons');
+                    renderWordList('clothes');
+                    updateImportExport();
+                    
+                    alert(`✅ Zaimportowano słówka!\n\n` +
+                          `Pory roku: ${data.seasons.length}\n` +
+                          `Ubrania: ${data.clothes.length}\n` +
+                          `Razem: ${data.seasons.length + data.clothes.length} słówek`);
+                    
+                } catch (e) {
+                    alert('❌ Błąd odczytu pliku JSON!\n\n' + e.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset input
+            event.target.value = '';
         }
 
         function resetToDefault() {
@@ -1871,6 +2301,7 @@
         }
 
         // Inicjalizacja gry
+        updateActiveCategoriesDisplay();
         initGame();
     </script>
 </body>
